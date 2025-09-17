@@ -1,0 +1,375 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chat App with DMs</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    #messages { border: 1px solid #ccc; height: 200px; overflow-y: auto; padding: 5px; }
+    #online { margin: 10px 0; }
+    .typing { color: gray; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <h2>Chat Application</h2>
+
+  <input id="username" placeholder="Enter username" />
+  <button onclick="joinChat()">Join</button>
+
+  <div id="online"><b>Online Users:</b></div>
+  <div id="messages"></div>
+  <p id="typing"></p>
+
+  <input id="messageInput" placeholder="Type a public message..." onkeydown="startTyping()" onkeyup="stopTyping()" />
+  <button onclick="sendMessage()">Send Public</button>
+
+  <br><br>
+  <h3>Private Message</h3>
+  <input id="toUser" placeholder="Recipient username" />
+  <input id="privateMsg" placeholder="Type a private message..." />
+  <button onclick="sendPrivate()">Send Private</button>
+
+  <script>
+    const socket = io("http://localhost:5000");
+
+    function joinChat() {
+      const username = document.getElementById("username").value;
+      socket.emit("join", username);
+    }
+
+    // Public messages
+    socket.on("chatMessage", (data) => {
+      const div = document.createElement("div");
+      div.textContent = `${data.username}: ${data.msg}`;
+      document.getElementById("messages").appendChild(div);
+    });
+
+    // Private messages
+    socket.on("privateMessage", (data) => {
+      const div = document.createElement("div");
+      div.textContent = `🔒 [Private] ${data.from}: ${data.msg}`;
+      div.style.color = "blue";
+      document.getElementById("messages").appendChild(div);
+    });
+
+    socket.on("privateMessageError", (msg) => {
+      alert(msg);
+    });
+
+    // Online users
+    socket.on("onlineUsers", (users) => {
+      document.getElementById("online").innerHTML =
+        "<b>Online Users:</b> " + users.join(", ");
+    });
+
+    // Typing indicator
+    socket.on("typing", (username) => {
+      document.getElementById("typing").textContent = `${username} is typing...`;
+    });
+
+    socket.on("stopTyping", () => {
+      document.getElementById("typing").textContent = "";
+    });
+
+    // Send public message
+    function sendMessage() {
+      const msg = document.getElementById("messageInput").value;
+      socket.emit("chatMessage", msg);
+      document.getElementById("messageInput").value = "";
+      stopTyping();
+    }
+
+    // Send private message
+    function sendPrivate() {
+      const to = document.getElementById("toUser").value;
+      const msg = document.getElementById("privateMsg").value;
+      socket.emit("privateMessage", { to, msg });
+      document.getElementById("privateMsg").value = "";
+    }
+
+    // Typing events
+    let typingTimeout;
+    function startTyping() {
+      socket.emit("typing");
+      clearTimeout(typingTimeout);
+    }
+    function stopTyping() {
+      typingTimeout = setTimeout(() => socket.emit("stopTyping"), 500);
+    }
+  </script>
+</body>
+</html> -->
+
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title> Chat </title>
+
+  <!-- Bootstrap CSS (CDN) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Socket.IO client -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+  <style>
+    body { background: #f6f8fa; }
+    .chat-panel { height: 70vh; }
+    #messages { height: calc(70vh - 120px); overflow-y: auto; padding: 1rem; background: #fff; border-radius: .5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .message { margin-bottom: .6rem; }
+    .message.me { text-align: right; }
+    .message .bubble { display: inline-block; padding: .55rem .8rem; border-radius: .75rem; max-width: 75%; }
+    .message.me .bubble { background: #0d6efd; color: #fff; }
+    .message.other .bubble { background: #e9ecef; color: #212529; }
+    .user-list { max-height: 70vh; overflow-y: auto; }
+    .typing { color: #6c757d; font-size: .9rem; margin-top: .25rem; }
+    .dm-badge { font-size: .75rem; }
+  </style>
+</head>
+<body>
+  <!-- Container -->
+  <div class="container py-4">
+    <div class="row g-3">
+      <!-- Left: Users -->
+      <div class="col-12 col-md-4">
+        <div class="card user-list">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Online Users</strong>
+            <button id="btnRefresh" class="btn btn-sm btn-outline-secondary">Refresh</button>
+          </div>
+          <div class="list-group list-group-flush" id="onlineUsers"></div>
+        </div>
+
+        <div class="card mt-3">
+          <div class="card-body small text-muted">
+            Click a user to open a private chat. Use the public box to send messages to everyone.
+          </div>
+        </div>
+      </div>
+
+      <!-- Middle: Chat -->
+      <div class="col-12 col-md-5">
+        <div class="card chat-panel">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <div>
+              <h6 class="mb-0">Global Chat</h6>
+              <small id="currentUser" class="text-muted">Not joined</small>
+            </div>
+            <div>
+              <span id="onlineCount" class="badge bg-success">0 online</span>
+            </div>
+          </div>
+
+          <div id="messages" class="card-body"></div>
+
+          <div class="card-footer">
+            <div id="typingIndicator" class="typing"></div>
+
+            <div class="input-group">
+              <input id="messageInput" type="text" class="form-control" placeholder="Type a public message..." />
+              <button class="btn btn-primary" id="sendBtn">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: DM Panel -->
+      <div class="col-12 col-md-3">
+        <div class="card">
+          <div class="card-header">
+            <strong>Direct Message</strong>
+            <div class="small text-muted">Select a user to DM</div>
+          </div>
+          <div class="card-body d-flex flex-column" style="height:70vh;">
+            <div id="dmChat" class="flex-grow-1 mb-2" style="overflow-y:auto; background:#fff; padding: .75rem; border-radius:.5rem; box-shadow: 0 2px 6px rgba(0,0,0,0.04);"></div>
+
+            <input id="dmTo" class="form-control mb-2" placeholder="Recipient username (click from left)" readonly />
+            <div class="input-group">
+              <input id="dmInput" class="form-control" placeholder="Type private message..." />
+              <button id="dmSend" class="btn btn-outline-primary">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Username modal -->
+  <div class="modal fade" id="usernameModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Enter your name</h5>
+        </div>
+        <div class="modal-body">
+          <input id="modalUsername" class="form-control" placeholder="Your display name" />
+        </div>
+        <div class="modal-footer">
+          <button id="joinBtn" class="btn btn-primary">Join Chat</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS (bundle includes Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // ---- Socket setup ----
+    const socket = io("http://localhost:5000");
+
+    // UI elements
+    const onlineUsersEl = document.getElementById("onlineUsers");
+    const messagesEl = document.getElementById("messages");
+    const dmChat = document.getElementById("dmChat");
+    const currentUserEl = document.getElementById("currentUser");
+    const onlineCountEl = document.getElementById("onlineCount");
+    const typingIndicator = document.getElementById("typingIndicator");
+
+    const messageInput = document.getElementById("messageInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const dmTo = document.getElementById("dmTo");
+    const dmInput = document.getElementById("dmInput");
+    const dmSend = document.getElementById("dmSend");
+    const btnRefresh = document.getElementById("btnRefresh");
+
+    let myName = null;
+    let typingTimeout;
+
+    // Show username modal on load
+    const usernameModal = new bootstrap.Modal(document.getElementById('usernameModal'));
+    usernameModal.show();
+
+    // Join chat
+    document.getElementById("joinBtn").addEventListener("click", () => {
+      const name = document.getElementById("modalUsername").value.trim();
+      if (!name) return alert("Please enter a name");
+      myName = name;
+      currentUserEl.textContent = name;
+      socket.emit("join", name);
+      usernameModal.hide();
+    });
+
+    // Send public message
+    sendBtn.addEventListener("click", () => {
+      const txt = messageInput.value.trim();
+      if (!txt) return;
+      socket.emit("chatMessage", txt);
+      appendMessage({ username: myName, msg: txt }, true);
+      messageInput.value = "";
+      stopTypingPublic();
+    });
+
+    messageInput.addEventListener("keydown", () => {
+      socket.emit("typing");
+      clearTimeout(typingTimeout);
+    });
+    messageInput.addEventListener("keyup", () => {
+      typingTimeout = setTimeout(stopTypingPublic, 600);
+    });
+
+    function stopTypingPublic() {
+      socket.emit("stopTyping");
+    }
+
+    // DM send
+    dmSend.addEventListener("click", () => {
+      const to = dmTo.value.trim();
+      const msg = dmInput.value.trim();
+      if (!to) return alert("Choose recipient first");
+      if (!msg) return;
+      socket.emit("privateMessage", { to, msg });
+      appendDmMessage({ from: myName, to, msg, me: true });
+      dmInput.value = "";
+    });
+
+    // Refresh online users (manual)
+    btnRefresh.addEventListener("click", () => {
+      socket.emit("requestOnline"); // optional server handler
+    });
+
+    // ---- Socket listeners ----
+    socket.on("connect", () => {
+      console.log("Connected:", socket.id);
+    });
+
+    socket.on("onlineUsers", (users) => {
+      // users is array of usernames
+      renderOnlineUsers(users);
+      onlineCountEl.textContent = users.length + " online";
+    });
+
+    socket.on("chatMessage", (data) => {
+      // data: { username, msg }
+      // If it's our own (we already appended), skip appending duplicate by checking name+msg maybe
+      if (data.username === myName) return;
+      appendMessage(data, false);
+    });
+
+    socket.on("typing", (username) => {
+      typingIndicator.textContent = username + " is typing...";
+    });
+    socket.on("stopTyping", () => {
+      typingIndicator.textContent = "";
+    });
+
+    socket.on("privateMessage", (data) => {
+      // data: { from, msg }
+      appendDmMessage({ from: data.from, msg: data.msg, me: false });
+    });
+
+    socket.on("privateMessageError", (msg) => {
+      alert(msg);
+    });
+
+    // ---- UI helpers ----
+    function renderOnlineUsers(users) {
+      onlineUsersEl.innerHTML = "";
+      users.forEach(u => {
+        const item = document.createElement("button");
+        item.className = "list-group-item list-group-item-action d-flex justify-content-between align-items-center";
+        item.innerHTML = `<span>${u}</span><span class="badge bg-primary dm-badge">DM</span>`;
+        item.onclick = () => {
+          dmTo.value = u;
+          // highlight selected
+          Array.from(onlineUsersEl.children).forEach(ch => ch.classList.remove("active"));
+          item.classList.add("active");
+        };
+        onlineUsersEl.appendChild(item);
+      });
+    }
+
+    function appendMessage({ username, msg }, isMe) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "message " + (isMe ? "me" : "other");
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.innerHTML = `<small class="text-muted">${username}</small><div>${escapeHtml(msg)}</div>`;
+      wrapper.appendChild(bubble);
+      messagesEl.appendChild(wrapper);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function appendDmMessage({ from, to, msg, me }) {
+      const el = document.createElement("div");
+      el.className = "mb-2";
+      el.innerHTML = me
+        ? `<div class="text-end"><small class="text-muted">To ${to}</small><div class="badge rounded-pill bg-primary text-wrap">${escapeHtml(msg)}</div></div>`
+        : `<div><small class="text-muted">From ${from}</small><div class="badge rounded-pill bg-light text-wrap">${escapeHtml(msg)}</div></div>`;
+      dmChat.appendChild(el);
+      dmChat.scrollTop = dmChat.scrollHeight;
+    }
+
+    function escapeHtml(unsafe) {
+      return unsafe
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+  </script>
+</body>
+</html>
